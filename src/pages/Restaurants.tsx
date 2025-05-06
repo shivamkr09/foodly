@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import RestaurantCard from '@/components/RestaurantCard';
@@ -7,6 +7,7 @@ import CategoryFilter from '@/components/CategoryFilter';
 import { supabase } from '@/integrations/supabase/client';
 import { Restaurant } from '@/data/models';
 import { Loader2 } from 'lucide-react';
+import { mapSupabaseRestaurant } from '@/utils/dataMappers';
 
 const Restaurants = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -21,7 +22,7 @@ const Restaurants = () => {
         
       if (error) throw error;
       
-      return data as Restaurant[];
+      return data.map(mapSupabaseRestaurant) as Restaurant[];
     }
   });
   

@@ -8,10 +8,14 @@ import Layout from '@/components/Layout';
 import MenuItemCard from '@/components/MenuItemCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2 } from 'lucide-react';
+import { mapSupabaseMenuItem, mapSupabaseRestaurant } from '@/utils/dataMappers';
+import MenuItemModal from '@/components/MenuItemModal';
 
 const RestaurantDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Fetch restaurant details
   const { data: restaurant, isLoading: loadingRestaurant } = useQuery({
@@ -27,7 +31,7 @@ const RestaurantDetail = () => {
         
       if (error) throw error;
       
-      return data as Restaurant;
+      return mapSupabaseRestaurant(data);
     }
   });
   
@@ -44,10 +48,20 @@ const RestaurantDetail = () => {
         
       if (error) throw error;
       
-      return data as MenuItem[];
+      return data.map(mapSupabaseMenuItem) as MenuItem[];
     },
     enabled: !!id
   });
+  
+  const handleSelectMenuItem = (menuItem: MenuItem) => {
+    setSelectedMenuItem(menuItem);
+    setIsModalOpen(true);
+  };
+  
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedMenuItem(null);
+  };
   
   // Get unique categories from menu items
   const categories = menuItems 
@@ -119,7 +133,7 @@ const RestaurantDetail = () => {
                     <MenuItemCard 
                       key={item.id} 
                       menuItem={item}
-                      restaurantId={id || ''}
+                      onSelect={handleSelectMenuItem}
                     />
                   ))}
                 </div>
@@ -131,6 +145,13 @@ const RestaurantDetail = () => {
             <p className="text-lg text-gray-500">This restaurant hasn't added any menu items yet.</p>
           </div>
         )}
+        
+        {/* Menu Item Modal */}
+        <MenuItemModal
+          menuItem={selectedMenuItem}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
       </div>
     </Layout>
   );
