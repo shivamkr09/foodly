@@ -1,53 +1,80 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import Layout from '@/components/Layout';
-import CategoryFilter from '@/components/CategoryFilter';
-import MenuItemCard from '@/components/MenuItemCard';
-import MenuItemModal from '@/components/MenuItemModal';
-import { restaurants, menuItems, mealCategories } from '@/data/mockData';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Restaurant, MenuItem } from '@/data/models';
-import { Star } from 'lucide-react';
+import Layout from '@/components/Layout';
+import MenuItemCard from '@/components/MenuItemCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2 } from 'lucide-react';
 
 const RestaurantDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [restaurantMenuItems, setRestaurantMenuItems] = useState<MenuItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  useEffect(() => {
-    // Find restaurant details
-    const foundRestaurant = restaurants.find(r => r.id === id);
-    if (foundRestaurant) {
-      setRestaurant(foundRestaurant);
+  
+  // Fetch restaurant details
+  const { data: restaurant, isLoading: loadingRestaurant } = useQuery({
+    queryKey: ['restaurant', id],
+    queryFn: async () => {
+      if (!id) throw new Error("Restaurant ID is required");
+      
+      const { data, error } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (error) throw error;
+      
+      return data as Restaurant;
     }
-
-    // Find menu items for this restaurant
-    const foundMenuItems = menuItems.filter(item => item.restaurantId === id);
-    setRestaurantMenuItems(foundMenuItems);
-  }, [id]);
-
-  const handleOpenModal = (menuItem: MenuItem) => {
-    setSelectedMenuItem(menuItem);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedMenuItem(null);
-  };
-
-  const filteredMenuItems = selectedCategory
-    ? restaurantMenuItems.filter(item => item.category === selectedCategory)
-    : restaurantMenuItems;
+  });
+  
+  // Fetch menu items for this restaurant
+  const { data: menuItems, isLoading: loadingMenu } = useQuery({
+    queryKey: ['menu-items', id],
+    queryFn: async () => {
+      if (!id) throw new Error("Restaurant ID is required");
+      
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('restaurant_id', id);
+        
+      if (error) throw error;
+      
+      return data as MenuItem[];
+    },
+    enabled: !!id
+  });
+  
+  // Get unique categories from menu items
+  const categories = menuItems 
+    ? Array.from(new Set(menuItems.map(item => item.category)))
+    : [];
+  
+  // Filter menu items by selected category
+  const filteredItems = selectedCategory 
+    ? menuItems?.filter(item => item.category === selectedCategory)
+    : menuItems;
+  
+  if (loadingRestaurant || loadingMenu) {
+    return (
+      <Layout>
+        <div className="container py-12 flex justify-center items-center min-h-[60vh]">
+          <Loader2 className="h-10 w-10 animate-spin text-foodly-red" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!restaurant) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-16">
-          <p className="text-center">Loading restaurant details...</p>
+        <div className="container py-12 text-center">
+          <h2 className="text-2xl font-bold">Restaurant not found</h2>
+          <p className="mt-2 text-gray-600">The restaurant you're looking for doesn't exist or has been removed.</p>
         </div>
       </Layout>
     );
@@ -55,64 +82,56 @@ const RestaurantDetail = () => {
 
   return (
     <Layout>
-      {/* Restaurant Header */}
-      <div className="relative h-64 md:h-80 bg-gray-200">
-        <img
-          src={restaurant.image}
-          alt={restaurant.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-30"></div>
-        <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-          <div className="container mx-auto">
-            <h1 className="text-3xl md:text-4xl font-bold">{restaurant.name}</h1>
-            <div className="flex items-center mt-2">
-              <Star className="text-yellow-400 w-5 h-5 mr-1" />
-              <span>{restaurant.rating}</span>
-              <span className="mx-2">•</span>
-              <span>{restaurant.cuisine}</span>
-              <span className="mx-2">•</span>
-              <span>{restaurant.deliveryTime}</span>
+      <div className="container py-8">
+        {/* Restaurant Header */}
+        <div className="relative h-64 w-full mb-8 overflow-hidden rounded-xl">
+          <img 
+            src={restaurant.image} 
+            alt={restaurant.name} 
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
+            <div className="text-white">
+              <h1 className="text-3xl font-bold">{restaurant.name}</h1>
+              <p className="mt-1">{restaurant.cuisine} • ${restaurant.deliveryFee.toFixed(2)} delivery fee • {restaurant.deliveryTime}</p>
             </div>
-            <p className="mt-2">{restaurant.description}</p>
           </div>
         </div>
-      </div>
-
-      {/* Menu Content */}
-      <div className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold mb-6">Menu</h2>
         
-        <CategoryFilter
-          categories={mealCategories}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-        />
+        {/* Restaurant Description */}
+        <p className="text-gray-600 mb-8">{restaurant.description}</p>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          {filteredMenuItems.map(menuItem => (
-            <MenuItemCard 
-              key={menuItem.id} 
-              menuItem={menuItem} 
-              onSelect={handleOpenModal}
-            />
-          ))}
-          
-          {filteredMenuItems.length === 0 && (
-            <div className="col-span-full text-center py-12">
-              <h3 className="text-xl font-medium text-foodly-darkText">No items found</h3>
-              <p className="text-foodly-lightText mt-2">Try selecting another category</p>
-            </div>
-          )}
-        </div>
+        {/* Menu Categories */}
+        {categories.length > 0 ? (
+          <Tabs defaultValue={categories[0]} className="mb-8" onValueChange={setSelectedCategory}>
+            <TabsList className="mb-6 flex flex-wrap space-x-2">
+              {categories.map(category => (
+                <TabsTrigger key={category} value={category} className="px-4 py-2">
+                  {category}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            
+            {categories.map(category => (
+              <TabsContent key={category} value={category} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {menuItems?.filter(item => item.category === category).map(item => (
+                    <MenuItemCard 
+                      key={item.id} 
+                      menuItem={item}
+                      restaurantId={id || ''}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-lg text-gray-500">This restaurant hasn't added any menu items yet.</p>
+          </div>
+        )}
       </div>
-
-      {/* Menu Item Modal */}
-      <MenuItemModal
-        menuItem={selectedMenuItem}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-      />
     </Layout>
   );
 };
