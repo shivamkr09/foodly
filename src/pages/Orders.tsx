@@ -6,9 +6,11 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Utensils } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const Orders = () => {
   const { user, isLoading: authLoading } = useAuth();
@@ -17,6 +19,8 @@ const Orders = () => {
   
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
   
   useEffect(() => {
     if (!authLoading && !user) {
@@ -31,7 +35,9 @@ const Orders = () => {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      console.log('Fetching orders for user:', user?.id);
+      
+      const { data: ordersData, error } = await supabase
         .from('orders')
         .select('*, restaurants(name, image)')
         .eq('user_id', user?.id)
@@ -39,7 +45,8 @@ const Orders = () => {
       
       if (error) throw error;
       
-      setOrders(data || []);
+      console.log('Orders fetched:', ordersData?.length || 0);
+      setOrders(ordersData || []);
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       toast({
@@ -50,6 +57,11 @@ const Orders = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleViewOrderDetails = (order: any) => {
+    setSelectedOrder(order);
+    setIsOrderDetailsOpen(true);
   };
   
   const getStatusClassName = (status: string) => {
@@ -97,6 +109,81 @@ const Orders = () => {
             {renderOrdersTable(orders.filter(order => ['delivered', 'cancelled'].includes(order.status)))}
           </TabsContent>
         </Tabs>
+        
+        {/* Order Details Dialog */}
+        <Dialog open={isOrderDetailsOpen} onOpenChange={setIsOrderDetailsOpen}>
+          <DialogContent className="max-w-md sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Order Details</DialogTitle>
+            </DialogHeader>
+            
+            {selectedOrder && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    {selectedOrder.restaurants?.image && (
+                      <img 
+                        src={selectedOrder.restaurants.image} 
+                        alt={selectedOrder.restaurants?.name} 
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    )}
+                    <div>
+                      <p className="font-medium">{selectedOrder.restaurants?.name || 'Unknown Restaurant'}</p>
+                      <p className="text-xs text-gray-500">
+                        Order #{selectedOrder.id.slice(0, 8)} • {new Date(selectedOrder.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusClassName(selectedOrder.status)}`}>
+                    {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                  </div>
+                </div>
+                
+                <div className="border-t pt-2">
+                  <p className="text-sm text-gray-500 mb-2">Delivery Address</p>
+                  {selectedOrder.address && (
+                    <>
+                      <p>{selectedOrder.address.street}</p>
+                      <p>{selectedOrder.address.city}, {selectedOrder.address.state} {selectedOrder.address.zipCode}</p>
+                    </>
+                  )}
+                </div>
+                
+                <div className="border-t pt-2">
+                  <p className="text-sm text-gray-500 mb-2">Items</p>
+                  {Array.isArray(selectedOrder.items) && selectedOrder.items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between py-1 border-b last:border-0">
+                      <p>{item.quantity}x {item.name}</p>
+                      <p>${(item.price * item.quantity).toFixed(2)}</p>
+                    </div>
+                  ))}
+                  
+                  <div className="mt-2 pt-2">
+                    <div className="flex justify-between text-sm">
+                      <p>Subtotal</p>
+                      <p>${(selectedOrder.total - selectedOrder.delivery_fee + selectedOrder.discount).toFixed(2)}</p>
+                    </div>
+                    {selectedOrder.discount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <p>Discount</p>
+                        <p>-${selectedOrder.discount.toFixed(2)}</p>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <p>Delivery Fee</p>
+                      <p>${selectedOrder.delivery_fee.toFixed(2)}</p>
+                    </div>
+                    <div className="flex justify-between font-bold mt-1 pt-1 border-t">
+                      <p>Total</p>
+                      <p>${selectedOrder.total.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
@@ -126,11 +213,12 @@ const Orders = () => {
                 <TableHead>Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {ordersToDisplay.map((order) => (
-                <TableRow key={order.id} className="cursor-pointer hover:bg-gray-50" onClick={() => navigate(`/orders/${order.id}`)}>
+                <TableRow key={order.id} className="cursor-pointer hover:bg-gray-50">
                   <TableCell className="font-medium">{order.id.slice(0, 8)}</TableCell>
                   <TableCell>{order.restaurants?.name || 'Unknown Restaurant'}</TableCell>
                   <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
@@ -139,6 +227,15 @@ const Orders = () => {
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClassName(order.status)}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewOrderDetails(order)}
+                    >
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

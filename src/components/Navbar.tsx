@@ -4,11 +4,26 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { Search, ShoppingCart, User } from 'lucide-react';
+import { Search, ShoppingCart, User, FileText } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
+  const isMobile = useIsMobile();
+  
+  if (isMobile) {
+    // Show a simplified navbar for mobile
+    return (
+      <nav className="sticky top-0 z-20 bg-white shadow-sm">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-center">
+          <Link to="/" className="text-2xl font-bold text-foodly-red">
+            FOODLY
+          </Link>
+        </div>
+      </nav>
+    );
+  }
   
   return (
     <nav className="sticky top-0 z-20 bg-white shadow-sm">
@@ -23,6 +38,9 @@ const Navbar = () => {
           </Link>
           <Link to="/restaurants" className="text-foodly-darkText hover:text-foodly-red transition-colors">
             Restaurants
+          </Link>
+          <Link to="/orders" className="text-foodly-darkText hover:text-foodly-red transition-colors">
+            Orders
           </Link>
           <Link to="/about" className="text-foodly-darkText hover:text-foodly-red transition-colors">
             About

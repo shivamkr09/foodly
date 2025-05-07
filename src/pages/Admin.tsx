@@ -634,14 +634,22 @@ const OrderManagement = () => {
         .single();
 
       if (error) {
-        throw error;
+        console.error('Error fetching restaurant ID:', error);
+        toast({
+          title: 'Error',
+          description: 'Could not find your restaurant. Please make sure you have created one.',
+          variant: 'destructive',
+        });
       }
 
       if (data) {
         setRestaurantId(data.id);
+        console.log('Restaurant ID found:', data.id);
+      } else {
+        console.log('No restaurant found for current user');
       }
     } catch (error) {
-      console.error('Error fetching restaurant ID:', error);
+      console.error('Exception in fetchRestaurantId:', error);
     } finally {
       setIsLoading(false);
     }
@@ -650,6 +658,7 @@ const OrderManagement = () => {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
+      console.log('Fetching orders for restaurant:', restaurantId);
       
       // First fetch all orders for this restaurant
       const { data: ordersData, error: ordersError } = await supabase
@@ -658,12 +667,18 @@ const OrderManagement = () => {
         .eq('restaurant_id', restaurantId)
         .order('created_at', { ascending: false });
       
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('Error fetching orders:', ordersError);
+        throw ordersError;
+      }
+      
+      console.log('Orders found:', ordersData?.length || 0);
       
       // If we have orders, fetch the user profiles separately
       if (ordersData && ordersData.length > 0) {
         // Get unique user IDs from orders
         const userIds = [...new Set(ordersData.map(order => order.user_id))];
+        console.log('Unique user IDs:', userIds);
         
         // Fetch profiles for these users
         const { data: profilesData, error: profilesError } = await supabase
@@ -671,7 +686,12 @@ const OrderManagement = () => {
           .select('id, name, email, phone')
           .in('id', userIds);
         
-        if (profilesError) throw profilesError;
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+          throw profilesError;
+        }
+        
+        console.log('Profiles found:', profilesData?.length || 0);
         
         // Create a map of profiles by user ID for quick lookup
         const profilesMap = {};
@@ -688,11 +708,13 @@ const OrderManagement = () => {
         }));
         
         setOrders(ordersWithProfiles);
+        console.log('Orders with profiles:', ordersWithProfiles);
       } else {
+        console.log('No orders found');
         setOrders([]);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error in fetchOrders:', error);
       toast({
         title: 'Error',
         description: 'Failed to load orders',
