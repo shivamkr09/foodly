@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -115,7 +114,7 @@ const RestaurantDashboard = () => {
       
       fetchRestaurantData();
       setIsEditing(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving restaurant:', error);
       toast({
         title: 'Error',
@@ -591,12 +590,16 @@ const MenuManagement = () => {
   );
 };
 
-// Order Management Component
+// Order Management Component 
 const OrderManagement = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isOrderDetailsOpen, setIsOrderDetailsOpen] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -635,7 +638,12 @@ const OrderManagement = () => {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select(`*, 
+          profiles:user_id (
+            name, 
+            email, 
+            phone
+          )`)
         .eq('restaurant_id', restaurantId)
         .order('created_at', { ascending: false });
 
@@ -646,8 +654,61 @@ const OrderManagement = () => {
       setOrders(data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load orders',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleViewOrderDetails = (order: any) => {
+    setSelectedOrder(order);
+    setIsOrderDetailsOpen(true);
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Order Updated',
+        description: `Order status has been updated to ${newStatus}.`
+      });
+      
+      fetchOrders();
+      setIsOrderDetailsOpen(false);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update order status',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'preparing': return 'bg-blue-100 text-blue-800';
+      case 'ready': return 'bg-purple-100 text-purple-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -667,57 +728,172 @@ const OrderManagement = () => {
     );
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'preparing': return 'bg-blue-100 text-blue-800';
-      case 'ready': return 'bg-purple-100 text-purple-800';
-      case 'delivered': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Orders</h2>
       
       {orders.length > 0 ? (
         <div className="space-y-4">
-          {orders.map((order) => (
-            <Card key={order.id} className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg">Order #{order.id.slice(0, 8)}</CardTitle>
-                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                  </div>
-                </div>
-                <CardDescription>
-                  {new Date(order.created_at).toLocaleDateString()} at {new Date(order.created_at).toLocaleTimeString()}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <h4 className="font-medium text-sm">Items:</h4>
-                  {Array.isArray(order.items) && order.items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span>
-                        {item.quantity}x {item.name}
-                      </span>
-                      <span>${(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Recent Orders</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">{order.id.slice(0, 8)}</TableCell>
+                      <TableCell>{order.profiles?.name || 'Anonymous'}</TableCell>
+                      <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>${order.total.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewOrderDetails(order)}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                  <div className="pt-2 border-t mt-2">
-                    <div className="flex justify-between font-medium">
-                      <span>Total:</span>
-                      <span>${order.total.toFixed(2)}</span>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          
+          {/* Order Details Dialog */}
+          <Dialog open={isOrderDetailsOpen} onOpenChange={setIsOrderDetailsOpen}>
+            <DialogContent className="max-w-md sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Order Details</DialogTitle>
+              </DialogHeader>
+              
+              {selectedOrder && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-gray-500">Order ID</p>
+                      <p className="font-medium">{selectedOrder.id.slice(0, 8)}</p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedOrder.status)}`}>
+                      {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-2">
+                    <p className="text-sm text-gray-500 mb-2">Customer Information</p>
+                    <p className="font-medium">{selectedOrder.profiles?.name || 'Anonymous'}</p>
+                    <p className="text-sm">{selectedOrder.profiles?.email || 'No email provided'}</p>
+                    <p className="text-sm">{selectedOrder.profiles?.phone || 'No phone provided'}</p>
+                  </div>
+                  
+                  <div className="border-t pt-2">
+                    <p className="text-sm text-gray-500 mb-2">Delivery Address</p>
+                    {selectedOrder.address && (
+                      <>
+                        <p>{selectedOrder.address.street}</p>
+                        <p>{selectedOrder.address.city}, {selectedOrder.address.state} {selectedOrder.address.zipCode}</p>
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className="border-t pt-2">
+                    <p className="text-sm text-gray-500 mb-2">Items</p>
+                    {Array.isArray(selectedOrder.items) && selectedOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between py-1">
+                        <p>{item.quantity}x {item.name}</p>
+                        <p>${(item.price * item.quantity).toFixed(2)}</p>
+                      </div>
+                    ))}
+                    
+                    <div className="border-t mt-2 pt-2">
+                      <div className="flex justify-between text-sm">
+                        <p>Subtotal</p>
+                        <p>${(selectedOrder.total - selectedOrder.delivery_fee + selectedOrder.discount).toFixed(2)}</p>
+                      </div>
+                      {selectedOrder.discount > 0 && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <p>Discount</p>
+                          <p>-${selectedOrder.discount.toFixed(2)}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <p>Delivery Fee</p>
+                        <p>${selectedOrder.delivery_fee.toFixed(2)}</p>
+                      </div>
+                      <div className="flex justify-between font-bold mt-1 pt-1 border-t">
+                        <p>Total</p>
+                        <p>${selectedOrder.total.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-gray-500 mb-2">Update Order Status</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedOrder.status !== 'preparing' && (
+                        <Button 
+                          variant="outline"
+                          disabled={isUpdatingStatus}
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'preparing')}
+                        >
+                          {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Preparing
+                        </Button>
+                      )}
+                      {selectedOrder.status !== 'ready' && (
+                        <Button 
+                          variant="outline"
+                          disabled={isUpdatingStatus}
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'ready')}
+                        >
+                          {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Ready
+                        </Button>
+                      )}
+                      {selectedOrder.status !== 'delivered' && (
+                        <Button 
+                          className="bg-foodly-red hover:bg-red-700"
+                          disabled={isUpdatingStatus}
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'delivered')}
+                        >
+                          {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Delivered
+                        </Button>
+                      )}
+                      {selectedOrder.status !== 'cancelled' && (
+                        <Button 
+                          variant="destructive"
+                          disabled={isUpdatingStatus}
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'cancelled')}
+                        >
+                          {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Cancel
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       ) : (
         <div className="text-center py-10 border rounded-lg">
