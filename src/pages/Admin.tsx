@@ -626,6 +626,7 @@ const OrderManagement = () => {
 
   const fetchRestaurantId = async () => {
     try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('restaurants')
         .select('id')
@@ -649,22 +650,47 @@ const OrderManagement = () => {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      
+      // First fetch all orders for this restaurant
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select(`*, 
-          profiles:user_id (
-            name, 
-            email, 
-            phone
-          )`)
+        .select('*')
         .eq('restaurant_id', restaurantId)
         .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
+      
+      if (ordersError) throw ordersError;
+      
+      // If we have orders, fetch the user profiles separately
+      if (ordersData && ordersData.length > 0) {
+        // Get unique user IDs from orders
+        const userIds = [...new Set(ordersData.map(order => order.user_id))];
+        
+        // Fetch profiles for these users
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, name, email, phone')
+          .in('id', userIds);
+        
+        if (profilesError) throw profilesError;
+        
+        // Create a map of profiles by user ID for quick lookup
+        const profilesMap = {};
+        if (profilesData) {
+          profilesData.forEach(profile => {
+            profilesMap[profile.id] = profile;
+          });
+        }
+        
+        // Combine order data with profile data
+        const ordersWithProfiles = ordersData.map(order => ({
+          ...order,
+          profiles: profilesMap[order.user_id] || null
+        }));
+        
+        setOrders(ordersWithProfiles);
+      } else {
+        setOrders([]);
       }
-
-      setOrders(data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast({
@@ -750,6 +776,9 @@ const OrderManagement = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle>Recent Orders</CardTitle>
+              <CardDescription>
+                You have {orders.length} order{orders.length !== 1 ? 's' : ''}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
