@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +15,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import MenuItemForm from '@/components/MenuItemForm';
 import CategoryForm from '@/components/CategoryForm';
 import { mapSupabaseMenuItem } from '@/utils/dataMappers';
+import { 
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableRow, 
+  TableHead, 
+  TableCell,
+  TableCaption, 
+  TableFooter 
+} from '@/components/ui/table';
 
 // Restaurant Dashboard Component
 const RestaurantDashboard = () => {
@@ -630,6 +641,8 @@ const OrderManagement = () => {
       }
     } catch (error) {
       console.error('Error fetching restaurant ID:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -712,7 +725,7 @@ const OrderManagement = () => {
     }
   };
 
-  if (!restaurantId) {
+  if (!restaurantId && !isLoading) {
     return (
       <div className="p-6 text-center">
         <p>You need to create a restaurant before accessing orders.</p>
