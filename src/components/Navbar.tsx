@@ -51,7 +51,7 @@ const Navbar = () => {
                 <User className="h-5 w-5" />
               </Button>
               
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover:block">
+              <div className="absolute right-0 mt-0 w-48 bg-white rounded-md shadow-lg py-1 z-20 hidden group-hover:block">
                 <div className="px-4 py-2 text-sm text-foodly-darkText border-b">
                   {user.name}
                 </div>
