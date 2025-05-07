@@ -3,6 +3,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Form,
   FormControl,
@@ -18,6 +19,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 const categorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   icon: z.string().optional(),
+  description: z.string().optional(),
 });
 
 type CategoryFormData = z.infer<typeof categorySchema>;
@@ -25,17 +27,20 @@ type CategoryFormData = z.infer<typeof categorySchema>;
 interface CategoryFormProps {
   onSubmit: (data: CategoryFormData) => Promise<void>;
   isSubmitting?: boolean;
+  initialData?: CategoryFormData;
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
   onSubmit,
   isSubmitting = false,
+  initialData,
 }) => {
   const form = useForm<CategoryFormData>({
     resolver: zodResolver(categorySchema),
-    defaultValues: {
+    defaultValues: initialData || {
       name: '',
       icon: '',
+      description: '',
     }
   });
 
@@ -50,6 +55,24 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               <FormLabel>Category Name</FormLabel>
               <FormControl>
                 <Input placeholder="e.g. Appetizers, Main Course, Desserts" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description (Optional)</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Brief description of this category" 
+                  className="resize-none" 
+                  {...field} 
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -76,7 +99,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
           disabled={isSubmitting}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create Category
+          {initialData ? 'Update Category' : 'Create Category'}
         </Button>
       </form>
     </Form>
